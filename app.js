@@ -10,9 +10,12 @@ app.use(express.static('public'));
 
 app.set('view engine', 'ejs');
 
-mongoose.connect("mongodb+srv://akeelah:smart001@cluster0.zhk5ybj.mongodb.net/todolistDB")
+// mongoose.connect("mongodb+srv://akeelah:smart001@cluster0.zhk5ybj.mongodb.net/todolistDB")
+mongoose.connect("mongodb://127.0.0.1:27017/todolistDB")
     .then(() => console.log("Database connection was successful."))
     .catch(err => console.log(err));
+
+let temporaryList = []
 
 const itemsSchema = new mongoose.Schema({
     name: {
@@ -44,87 +47,172 @@ const listSchema = new mongoose.Schema({
 
 const List = mongoose.model('List', listSchema);
 
+// User login Test functionality.
+const usersSchema = new mongoose.Schema({
+    userName: String,
+    defualtTodos: [itemsSchema],
+    customList: [listSchema]
+});
+
+const User = mongoose.model("User", usersSchema);
+
+// Home route should only render a temporary list items.
 app.get('/', (req, res) => {
 
-    Item.find()
-        .then(todoList => {
-            if (todoList.length === 0) {
-                Item.insertMany(defaultItems)
-                    .then(() => console.log("Default items inserted."))
-                    .catch(err => console.log(err));
-                res.redirect('/');
-            } else {
-                res.render('list', { listTittle: "Today", itemList: todoList });
-            }
-        })
-        .catch(err => console.log(err))
+    if (temporaryList.length === 0) {
+        temporaryList = temporaryList.concat(defaultItems);
+        console.log("Default items inserted.");
+        res.redirect('/');
+    } else {
+        res.render('list', { listTittle: "Today", itemList: temporaryList });
+    }
+
+});
+
+app.post("/", (req, res) => {
+    const itemName = req.body.item;
+
+    const newItem = new Item({ name: itemName });
+
+    temporaryList.push(newItem);
+    res.redirect('/');
+});
+
+app.post("/delete", (req, res) => {
+    const checkedId = req.body.checkbox;
+
+    temporaryList.forEach(item => {
+        const idString = String(item._id);
+        if (idString === checkedId) {
+            _.pull(temporaryList, item);
+        }
+    });
+    res.redirect("/");
 });
 
 
-app.get('/:customListName', (req, res) => {
-    const customListName = _.capitalize(req.params.customListName);
+// User signup test functionality.
 
-    List.findOne({ name: customListName })
-        .then(list => {
-            if (list) {
-                res.render('list', {listTittle: list.name, itemList: list.items});
+app.get('/signup', (req, res) => {
+    res.render('signup');
+})
+
+// Find user and login or create account
+
+app.post('/signup', (req, res) => {
+    const userName = req.body.userName;
+
+    User.findOne({ userName: userName })
+        .then(user => {
+            if (user) {
+                res.redirect(`/${user._id}`);
             } else {
-                const list = new List({
-                    name: customListName,
-                    items: defaultItems
+                const user = new User({
+                    userName: userName,
+                    defualtTodos: defaultItems
                 });
-                
-                list.save();
-                res.redirect('/' + customListName);
+                Item.insertMany(defaultItems)
+                user.save();
+
+                res.redirect(`/${user._id}`);
             }
         })
         .catch(err => console.log(err));
 });
 
-app.post('/', (req, res) => {
+app.get('/:userId', (req, res) => {
+    const accountID = req.params.userId;
+    User.findById(accountID)
+        .then(account => {
+            res.render('user', {
+                listTittle: "Today",
+                itemList: account.defualtTodos,
+                userId: accountID
+            })
+        })
+        .catch(err => console.log(err));
+});
+
+app.post('/:userId', (req, res) => {
+    const accountID = req.params.userId;
     const itemName = req.body.item;
     const listName = req.body.list;
 
     const newItem = new Item({ name: itemName });
 
-    if (listName === 'Today') {
-        newItem.save();
-        res.redirect('/');
-    } else {
-        List.findOne({name: listName})
-            .then(foundList => {
-                foundList.items.push(newItem);
-                foundList.save();
-                res.redirect('/' + listName);
-            })
-            .catch(err => console.log(err));
-    }
+    User.findById(accountID)
+        .then(account => {
+            if (listName === "Today") {
+                account.defualtTodos.push(newItem);
+                // newItem.save(); 
+                account.save();
+                res.redirect("/" + accountID);
+            } else {
+                const foundList = _.find(account.customList, {name: listName});
 
+                foundList.items.push(newItem);
+                account.save();
+                res.redirect(`/${accountID}/${listName}`);
+            }
+        })
+        .catch(err => console.log(err));
 });
 
-app.post('/delete', (req, res) => {
+
+app.post('/:userId/delete', (req, res) => {
+    const accountID = req.params.userId;
     const checkedId = req.body.checkbox;
     const listName = req.body.listName;
-    console.log(listName);
 
     if (listName === "Today") {
-        Item.findOneAndDelete(checkedId)
-            .then(() => console.log('1 item deleted.'))
+        User.findByIdAndUpdate(accountID, { $pull: { defualtTodos: { _id: checkedId } } })
             .catch(err => console.log(err));
-    
-        res.redirect('/');
+        res.redirect("/" + accountID);
     } else {
-        List.findOneAndUpdate({name: listName}, {$pull: {items: {_id: checkedId}}})
-            .then(() => console.log(`${listName} item deleted.`))
+        User.findById(accountID)
+            .then(account => {
+                const foundList = _.find(account.customList, {name: listName});
+
+                foundList.items.forEach(doc => {
+                    if ( String(doc._id) === checkedId) {
+                        foundList.items.pull(doc);
+                    }
+                })
+                account.save();
+                res.redirect(`/${accountID}/${listName}`);
+            })
             .catch(err => console.log(err));
-        
-        res.redirect('/' + listName);
+
     }
 })
 
+app.get('/:userId/:customListName', (req, res) => {
+    const accountID = req.params.userId;
+    const customListName = _.capitalize(req.params.customListName);
 
-app.get('/about', (req, res) => {
-    res.render('about');
+    User.findById(accountID)
+        .then(account => {
+            const foundList = _.find(account.customList, { name: customListName })
+            if (foundList) {
+                res.render('user', {
+                    listTittle: foundList.name,
+                    itemList: foundList.items,
+                    userId: accountID
+                })
+            } else {
+                const list = new List({
+                    name: customListName,
+                    items: defaultItems
+                });
+
+                account.customList.push(list);
+                account.save();
+
+                res.redirect(`/${accountID}/${customListName}`);
+            }
+        })
+        .catch(err => console.log(err));
+
 });
 
 const port = process.env.PORT || 3000
