@@ -10,8 +10,7 @@ app.use(express.static('public'));
 
 app.set('view engine', 'ejs');
 
-// mongoose.connect("mongodb+srv://akeelah:smart001@cluster0.zhk5ybj.mongodb.net/todolistDB")
-mongoose.connect("mongodb://127.0.0.1:27017/todolistDB")
+mongoose.connect("mongodb+srv://akeelah:smart001@cluster0.zhk5ybj.mongodb.net/todolistDB")
     .then(() => console.log("Database connection was successful."))
     .catch(err => console.log(err));
 
@@ -50,6 +49,7 @@ const List = mongoose.model('List', listSchema);
 // User login Test functionality.
 const usersSchema = new mongoose.Schema({
     userName: String,
+    password: String,
     defualtTodos: [itemsSchema],
     customList: [listSchema]
 });
@@ -101,26 +101,30 @@ app.get('/signup', (req, res) => {
 
 app.post('/signup', (req, res) => {
     const userName = req.body.userName;
+    const password = req.body.password;
 
     User.findOne({ userName: userName })
         .then(user => {
-            if (user) {
-                res.redirect(`/${user._id}`);
+            if (user && user.password === password) {
+                res.redirect(`/${user._id}/dashboard`);
+            } else if (user) {
+                res.redirect("/signup")
             } else {
                 const user = new User({
                     userName: userName,
+                    password: password,
                     defualtTodos: defaultItems
                 });
                 Item.insertMany(defaultItems)
                 user.save();
 
-                res.redirect(`/${user._id}`);
+                res.redirect(`/${user._id}/dashboard`);
             }
         })
         .catch(err => console.log(err));
 });
 
-app.get('/:userId', (req, res) => {
+app.get('/:userId/dashboard', (req, res) => {
     const accountID = req.params.userId;
     User.findById(accountID)
         .then(account => {
@@ -146,9 +150,9 @@ app.post('/:userId', (req, res) => {
                 account.defualtTodos.push(newItem);
                 // newItem.save(); 
                 account.save();
-                res.redirect("/" + accountID);
+                res.redirect("/" + accountID + "/dashboard");
             } else {
-                const foundList = _.find(account.customList, {name: listName});
+                const foundList = _.find(account.customList, { name: listName });
 
                 foundList.items.push(newItem);
                 account.save();
@@ -167,14 +171,14 @@ app.post('/:userId/delete', (req, res) => {
     if (listName === "Today") {
         User.findByIdAndUpdate(accountID, { $pull: { defualtTodos: { _id: checkedId } } })
             .catch(err => console.log(err));
-        res.redirect("/" + accountID);
+        res.redirect("/" + accountID + "/dashboard");
     } else {
         User.findById(accountID)
             .then(account => {
-                const foundList = _.find(account.customList, {name: listName});
+                const foundList = _.find(account.customList, { name: listName });
 
                 foundList.items.forEach(doc => {
-                    if ( String(doc._id) === checkedId) {
+                    if (String(doc._id) === checkedId) {
                         foundList.items.pull(doc);
                     }
                 })

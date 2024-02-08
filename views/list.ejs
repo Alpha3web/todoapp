@@ -1,6 +1,7 @@
 <%- include('partials/head'); -%>
 
 <body>
+    <p class="intro">Welcome to your todo app. You can create a todo list on the fly without signup. Note the todo list created without signing up is temporary and is centralize, that is to say anyone can see what you wrote and cand write to it at same time. For a private todo list please <a href="/signup">signup</a></p>
     <div class="box" id="heading">
         <h1>
             <%= listTittle %>
@@ -19,7 +20,7 @@
         <% }) %>
 
         <form class="item" action="/" method="post">
-            <input type="text" name="item" placeholder="New item" autocomplete="off">
+            <input class="todoInput" type="text" name="item" placeholder="New item" autocomplete="off">
             <button type="submit" name="list" value=<%= listTittle %>>+</button>
         </form>
     </div>

@@ -1,4 +1,14 @@
-<form action="/signup" method="post">
-     <input type="text" name="userName" placeholder="Enter username">
-     <button type="submit">signup</button>
-</form>
+<%- include('partials/head'); -%>
+
+<body>
+     <div class="box">
+          <h2>Signup/Signin</h2>
+          <form action="/signup" method="post">
+               <input class="signup" type="text" name="userName" placeholder="Enter username">
+               <input class="signup" type="password" name="password" placeholder="Enter password">
+               <input class="signup-sub" type="submit" value="Submit">
+          </form>
+     </div>
+</body>
+
+<%- include('partials/footer'); -%>
